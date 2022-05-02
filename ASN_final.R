@@ -1,5 +1,7 @@
 ## LIBRARY
-library(stats4,maxLik,rootSolve)
+library(stats4)
+library(maxLik)
+library(rootSolve)
 library(tidyverse)
 
 ###################
@@ -31,8 +33,8 @@ acharxp<-function(t,mu,sigma,alpha,u){
   u-pASN(t,mu,sigma,alpha)
 }
 
-## ASN Log-LIKELIHOOD
-loglike<-function(theta) {
+## ASN Log-LIKELIHOOD (MLE)
+fmle<-function(theta) {
   mu<-theta[1]
   sigma<-theta[2]
   alpha<-theta[3]
@@ -42,7 +44,7 @@ loglike<-function(theta) {
 } 
 
 ## ASN RIGHT-Tail ANDERSON-DARLING (RADE)
-frmad<- function(theta){
+fmrade<- function(theta){
   mi<-theta[1]
   sigma<-theta[2]
   alfa<-theta[3]
@@ -99,8 +101,9 @@ ggplot(DB, aes(MONTH, log(Flux))) +
   facet_wrap(~Year) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
+# Data Whitening
 dados=log(as.numeric(unlist(c(na.omit(DataSet[,3:12])))))
-hist(dados ,breaks=20 ,freq=FALSE, xlab="Flux", main = "Histogram - Monthly log(Water Flux)")
+hist(dados, breaks=20, freq=FALSE, xlab="Flux", main = "Histogram - Monthly log(Water Flux)")
 
 ######################
 ## ESTIMATION STEPS ##
@@ -120,23 +123,23 @@ psigma<-sd(t)
 w<-seq(-10,10,0.5)
 aux1<-c()
 for(i in 1:length(w)){
-  ESThat  <- try(maxBFGS(loglike, start=c(pmu,psigma,w[i]))$estimate)
+  ESThat  <- try(maxBFGS(fmle, start=c(pmu,psigma,w[i]))$estimate)
   aux1[i]<-ks.test(t,pASN,ESThat[1],ESThat[2],ESThat[3])$p.value
 }
 (palpha<- w[which.max(aux1)])
-(ASNmle  <- try(maxBFGS(loglike, start=c(pmu,psigma,palpha))$estimate) )
+(ASNmle  <- try(maxBFGS(fmle, start=c(pmu,psigma,palpha))$estimate) )
 
 aux2<-c()
 for(i in 1:length(w)){
-  ESThat  <- try(maxBFGS(frmad, start=c(pmu,psigma,w[i]))$estimate)
+  ESThat  <- try(maxBFGS(fmrade, start=c(pmu,psigma,w[i]))$estimate)
   aux2[i]<-ks.test(t,pASN,ESThat[1],ESThat[2],ESThat[3])$p.value
 }
 (palpha<- w[which.max(aux2)])
-(ASNmadr  <- try(maxBFGS(frmad, start=c(pmu,psigma,palpha))$estimate) )
+(ASNmadr  <- try(maxBFGS(fmrade, start=c(pmu,psigma,palpha))$estimate) )
 
 aux3<-c()
 for(i in 1:length(w)){
-  ESThat  <- try(maxBFGS(frmad, start=c(pmu,psigma,w[i]))$estimate)
+  ESThat  <- try(maxBFGS(fmps, start=c(pmu,psigma,w[i]))$estimate)
   aux3[i]<-ks.test(t,pASN,ESThat[1],ESThat[2],ESThat[3])$p.value
 }
 (palpha<- w[which.max(aux3)])
@@ -149,9 +152,9 @@ ks.test(t,pASN,ASNmadr[1],ASNmadr[2],ASNmadr[3])
 ks.test(t,pASN,ASNmps[1],ASNmps[2],ASNmps[3])
 
 ## ASN Akaike's Information Criterion (AIC)
--2*loglike(c(ASNmle[1],ASNmle[2],ASNmle[3]))+6
--2*loglike(c(ASNmadr[1],ASNmadr[2],ASNmadr[3]))+6
--2*loglike(c(ASNmps[1],ASNmps[2],ASNmps[3]))+6
+-2*fmle(c(ASNmle[1],ASNmle[2],ASNmle[3]))+6
+-2*fmle(c(ASNmadr[1],ASNmadr[2],ASNmadr[3]))+6
+-2*fmle(c(ASNmps[1],ASNmps[2],ASNmps[3]))+6
 
 
 ## VISUAL GOODNESS-OF-FIT
@@ -161,14 +164,14 @@ Ymadr<-dASN(Xhat,ASNmadr[1], ASNmadr[2], ASNmadr[3])
 Ymps<-dASN(Xhat,ASNmps[1], ASNmps[2], ASNmps[3])
 
 par(mfrow=c(1,2))
-hist(t,freq =FALSE,ylim = c(0,0.35), main="",xlab="Water Flux (natural log)")
+hist(t,freq=FALSE,breaks=20,ylim = c(0,0.35), main="",xlab="Water Flux (natural log)")
 points(Xhat,Ymle,type="l",col="1",lty=2)
 points(Xhat,Ymadr,type="l",col="2",lty=2)
 points(Xhat,Ymps,type="l",col="3",lty=2)
 legend("topright",c("MLE","rADE","MPS"),col=c(1,2,3),lty=c(2,2,2))
 
 #Adjusting KM
-ekm<-survival::survfit(Surv(t,rep(1,n))~1)
+ekm<-survival::survfit(survival::Surv(t,rep(1,n))~1)
 time<-ekm$time; st<-ekm$surv
 
 ekm<-ecdf(t)
